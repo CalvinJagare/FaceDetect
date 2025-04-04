@@ -14,4 +14,19 @@
 		<PackageReference Include="Emgu.CV.UI" Version="4.10.0.5680" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <None Update="Models\age_deploy.prototxt">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Models\age_net.caffemodel">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Models\gender_deploy.prototxt">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Models\gender_net.caffemodel">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
+
 </Project>

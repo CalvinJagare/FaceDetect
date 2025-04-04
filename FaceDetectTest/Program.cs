@@ -1,26 +1,24 @@
 ﻿using Emgu.CV;
 using Emgu.CV.CvEnum;
 using Emgu.CV.Structure;
+using Emgu.CV.Dnn;
 using System;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 
 class Program
 {
     static void Main(string[] args)
     {
-        // Load the cascade classifier for face detection
+        // Load the face cascade classifier
         string faceCascadeFile = @"C:\Users\calda\source\repos\FaceDetectTest\FaceDetectTest\Resources\haarcascade_frontalface_default.xml";
-
-
-        // Check if the file exists
         if (!File.Exists(faceCascadeFile))
         {
             Console.WriteLine($"Error: The file '{faceCascadeFile}' does not exist.");
             return;
         }
 
-        // Initialize the cascade classifier
         CascadeClassifier faceCascade;
         try
         {
@@ -32,47 +30,97 @@ class Program
             return;
         }
 
-        // Open the webcam (use 0 for default webcam)
-        var videoCapture = new VideoCapture(0);
+        // Load the pre-trained Age and Gender models
+        string modelFolder = @"C:\Users\calda\source\repos\FaceDetectTest\FaceDetectTest\Models\";  // Adjust if needed
+        string ageProto = Path.Combine(modelFolder, "age_deploy.prototxt");
+        string ageModel = Path.Combine(modelFolder, "age_net.caffemodel");
+        string genderProto = Path.Combine(modelFolder, "gender_deploy.prototxt");
+        string genderModel = Path.Combine(modelFolder, "gender_net.caffemodel");
 
-        // Check if the webcam is opened successfully
+        if (!File.Exists(ageModel) || !File.Exists(ageProto) || !File.Exists(genderModel) || !File.Exists(genderProto))
+        {
+            Console.WriteLine("Error: One or more model files are missing!");
+            return;
+        }
+
+        Net ageNet = DnnInvoke.ReadNetFromCaffe(ageProto, ageModel);
+        Net genderNet = DnnInvoke.ReadNetFromCaffe(genderProto, genderModel);
+
+        // Age & Gender labels
+        string[] ageList = { "0-2", "4-6", "8-12", "15-20", "25-32", "38-43", "48-53", "60-100" };
+        string[] genderList = { "Male", "Female" };
+
+        // Open the webcam
+        var videoCapture = new VideoCapture(0);
         if (!videoCapture.IsOpened)
         {
             Console.WriteLine("Error: Webcam could not be opened!");
             return;
         }
 
-        // Create a window to display the webcam feed using CvInvoke.Imshow
         while (true)
         {
-            // Capture a frame from the webcam
             var frame = videoCapture.QueryFrame();
+            if (frame == null) continue;
 
-            // Convert the frame to grayscale using ToImage<Gray, byte>()
             var grayImage = frame.ToImage<Gray, byte>();
-
-            // Detect faces in the frame
             var faces = faceCascade.DetectMultiScale(grayImage, 1.1, 10, new Size(20, 20));
 
-            // Draw rectangles around detected faces
             foreach (var face in faces)
             {
-                // You can use CvInvoke.Rectangle to draw the rectangle instead of Draw if there is an issue
-                CvInvoke.Rectangle(frame, face, new Bgr(Color.Red).MCvScalar, 2);
+                // Ensure the face ROI is within frame bounds
+                Rectangle faceRect = new Rectangle(face.X, face.Y, face.Width, face.Height);
+                faceRect.Intersect(new Rectangle(0, 0, frame.Width, frame.Height)); // Prevent errors near edges
+
+                if (faceRect.Width > 0 && faceRect.Height > 0) // Ensure valid size
+                {
+                    using (Mat faceRegion = new Mat(frame, faceRect)) // Crop the face
+                    {
+                        var faceImg = faceRegion.ToImage<Bgr, byte>().Resize(227, 227, Inter.Cubic);
+
+                        // Convert to a blob for the DNN models
+                        var blob = DnnInvoke.BlobFromImage(faceImg, 1.0, new Size(227, 227),
+                            new MCvScalar(78.4263377603, 87.7689143744, 114.895847746), false);
+
+                        // Predict Gender
+                        genderNet.SetInput(blob);
+                        var genderPreds = genderNet.Forward();
+                        int genderIndex = GetMaxIndex(genderPreds);
+                        string gender = genderList[genderIndex];
+
+                        // Predict Age
+                        ageNet.SetInput(blob);
+                        var agePreds = ageNet.Forward();
+                        int ageIndex = GetMaxIndex(agePreds);
+                        string age = ageList[ageIndex];
+
+                        // Draw face rectangle
+                        CvInvoke.Rectangle(frame, face, new Bgr(Color.Red).MCvScalar, 2);
+
+                        // Draw age & gender prediction
+                        string label = $"{gender}, {age}";
+                        CvInvoke.PutText(frame, label, new Point(face.X, face.Y - 10),
+                            FontFace.HersheySimplex, 0.8, new Bgr(Color.Yellow).MCvScalar, 2);
+                    }
+                }
             }
 
-            // Display the frame with detected faces
-            CvInvoke.Imshow("Webcam - Face Detection", frame);
+            // Show the frame
+            CvInvoke.Imshow("Webcam - Face Detection with Age & Gender", frame);
 
-            // Break the loop if the user presses a key
-            if (CvInvoke.WaitKey(1) >= 0)
-            {
+            // Exit if 'Esc' is pressed
+            if (CvInvoke.WaitKey(1) == 27)
                 break;
-            }
         }
 
-        // Release the webcam and close the window
         videoCapture.Dispose();
     }
-}
 
+    // Helper function to get the index of the highest probability in a DNN prediction
+    static int GetMaxIndex(Mat predictions)
+    {
+        float[] data = new float[predictions.Total.ToInt32()];
+        predictions.CopyTo(data);
+        return Array.IndexOf(data, data.Max());
+    }
+}
