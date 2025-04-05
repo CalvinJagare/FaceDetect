@@ -11,8 +11,8 @@ class Program
 {
     static void Main(string[] args)
     {
-        // Load the face cascade classifier
-        string faceCascadeFile = @"C:\Users\calda\source\repos\FaceDetectTest\FaceDetectTest\Resources\haarcascade_frontalface_default.xml";
+        
+        string faceCascadeFile = @"D:\Code stuff\FaceDetect\FaceDetectTest\Resources\haarcascade_frontalface_default.xml"; // ADjust if needed
         if (!File.Exists(faceCascadeFile))
         {
             Console.WriteLine($"Error: The file '{faceCascadeFile}' does not exist.");
@@ -30,8 +30,7 @@ class Program
             return;
         }
 
-        // Load the pre-trained Age and Gender models
-        string modelFolder = @"C:\Users\calda\source\repos\FaceDetectTest\FaceDetectTest\Models\";  // Adjust if needed
+        string modelFolder = @"D:\Code stuff\FaceDetect\FaceDetectTest\Models\";  // Adjust if needed
         string ageProto = Path.Combine(modelFolder, "age_deploy.prototxt");
         string ageModel = Path.Combine(modelFolder, "age_net.caffemodel");
         string genderProto = Path.Combine(modelFolder, "gender_deploy.prototxt");
@@ -67,18 +66,16 @@ class Program
             var faces = faceCascade.DetectMultiScale(grayImage, 1.1, 10, new Size(20, 20));
 
             foreach (var face in faces)
-            {
-                // Ensure the face ROI is within frame bounds
+            {               
                 Rectangle faceRect = new Rectangle(face.X, face.Y, face.Width, face.Height);
-                faceRect.Intersect(new Rectangle(0, 0, frame.Width, frame.Height)); // Prevent errors near edges
+                faceRect.Intersect(new Rectangle(0, 0, frame.Width, frame.Height)); 
 
-                if (faceRect.Width > 0 && faceRect.Height > 0) // Ensure valid size
+                if (faceRect.Width > 0 && faceRect.Height > 0) 
                 {
-                    using (Mat faceRegion = new Mat(frame, faceRect)) // Crop the face
+                    using (Mat faceRegion = new Mat(frame, faceRect)) 
                     {
                         var faceImg = faceRegion.ToImage<Bgr, byte>().Resize(227, 227, Inter.Cubic);
 
-                        // Convert to a blob for the DNN models
                         var blob = DnnInvoke.BlobFromImage(faceImg, 1.0, new Size(227, 227),
                             new MCvScalar(78.4263377603, 87.7689143744, 114.895847746), false);
 
@@ -105,10 +102,8 @@ class Program
                 }
             }
 
-            // Show the frame
             CvInvoke.Imshow("Webcam - Face Detection with Age & Gender", frame);
 
-            // Exit if 'Esc' is pressed
             if (CvInvoke.WaitKey(1) == 27)
                 break;
         }
@@ -116,7 +111,6 @@ class Program
         videoCapture.Dispose();
     }
 
-    // Helper function to get the index of the highest probability in a DNN prediction
     static int GetMaxIndex(Mat predictions)
     {
         float[] data = new float[predictions.Total.ToInt32()];
